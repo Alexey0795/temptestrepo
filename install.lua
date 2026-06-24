@@ -1,43 +1,62 @@
 --[[
   Установщик по manifest.txt (OpenOS, Internet Card).
 
-  Первый раз (одна команда wget + запуск):
-    wget -f https://raw.githubusercontent.com/USER/next-attempt-03/main/deploy/install.lua install.lua
-    lua install.lua https://raw.githubusercontent.com/USER/next-attempt-03/main/deploy/manifest.txt
+  lua install.lua
+  lua install.lua manifest.txt
 
-  Обновление (когда install.lua уже на диске):
-    lua install.lua
-    lua install.lua manifest.txt
-
-  Лог: install-log.txt   В игре: cat install-log.txt
+  Весь вывод — в install-log.txt
+  В игре: cat install-log.txt
 
   Подробно: docs/deploy-internet.md
 ]]
 
 local LOG_PATH = "install-log.txt"
 local DEFAULT_MANIFEST = "manifest.txt"
+local CONSOLE_QUIET = true
 
-local CLI_ARGS = { ... }
+local CLI_ARGS
+if _G.__INSTALL_ARG__ ~= nil then
+  CLI_ARGS = { _G.__INSTALL_ARG__ }
+else
+  CLI_ARGS = { ... }
+end
+
+local unpack = table.unpack or unpack
 
 local logFile = io.open(LOG_PATH, "w")
 if logFile then
   logFile:write("=== install " .. os.date("%Y-%m-%d %X") .. " ===\n")
 end
 
-local function log(msg)
+local nativePrint = print
+
+local function logRaw(msg)
   msg = tostring(msg)
-  print(msg)
   if logFile then
-    logFile:write(os.date("%X ") .. msg .. "\n")
+    logFile:write(msg .. "\n")
     logFile:flush()
   end
 end
 
-local function logTrace(tag, err)
-  log(tag .. ": " .. tostring(err))
-  if debug and debug.traceback then
-    log(debug.traceback(err, 2))
+local function log(msg)
+  msg = tostring(msg)
+  logRaw(os.date("%X ") .. msg)
+  if not CONSOLE_QUIET then
+    nativePrint(msg)
   end
+end
+
+local function logTrace(tag, err)
+  err = tostring(err)
+  logRaw(os.date("%X ") .. tag .. ": " .. err)
+  if debug and debug.traceback then
+    logRaw(debug.traceback(err, 2))
+  end
+end
+
+local function say(msg)
+  nativePrint(msg)
+  logRaw(os.date("%X ") .. "[console] " .. msg)
 end
 
 local ok, err = xpcall(function()
@@ -46,6 +65,25 @@ local ok, err = xpcall(function()
 
   local function trim(s)
     return (s:gsub("^%s+", ""):gsub("%s+$", ""))
+  end
+
+  local function shellToLog(cmd, ...)
+    local args = { ... }
+    local parts = { cmd }
+    for i = 1, #args do
+      parts[#parts + 1] = tostring(args[i])
+    end
+    log("exec: " .. table.concat(parts, " "))
+    logRaw("  (stdout/stderr -> " .. LOG_PATH .. ")")
+    local results = {
+      shell.execute(cmd, nil, unpack(args), ">>", LOG_PATH, "2>>", LOG_PATH)
+    }
+    local first, second = results[1], results[2]
+    log("  exit: " .. tostring(first) .. " " .. tostring(second or ""))
+    if first == true or first == 0 then
+      return true, second
+    end
+    return false, second or ("exit " .. tostring(first))
   end
 
   local function ensureParentDir(path)
@@ -59,7 +97,7 @@ local ok, err = xpcall(function()
   local function wget(url, dest)
     ensureParentDir(dest)
     log("GET " .. dest)
-    local okWget, reason = shell.execute("wget", "-f", url, dest)
+    local okWget, reason = shellToLog("wget", "-f", url, dest)
     if not okWget then
       return false, reason or "wget failed"
     end
@@ -162,19 +200,27 @@ local ok, err = xpcall(function()
     return false
   end
   log("VERDICT: INSTALL_OK")
-  log("cd experiment && lua 07-drone-server.lua")
   return true
 end, debug.traceback)
 
 if not ok then
   log("VERDICT: INSTALL_FAIL (crash)")
   logTrace("crash", err)
+  _G.__INSTALL_LAST_OK__ = false
 elseif err == false then
-  -- main вернул false — уже залогировано
+  _G.__INSTALL_LAST_OK__ = false
+else
+  _G.__INSTALL_LAST_OK__ = true
 end
 
 if logFile then
   logFile:close()
 end
 
-print("log: cat " .. LOG_PATH)
+if _G.__INSTALL_ARG__ == nil then
+  if _G.__INSTALL_LAST_OK__ then
+    say("OK — cat " .. LOG_PATH)
+  else
+    say("ОШИБКА — cat " .. LOG_PATH)
+  end
+end
