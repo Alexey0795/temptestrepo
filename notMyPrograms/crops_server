@@ -121,7 +121,7 @@ local function getCrop(cropName)
     cropStats.grow = crop.getGrowth()
     cropStats.resistance = crop.getResistance()
     cropStats.size = crop.getSize()
-    cropStats.maxSize = cropSizes[string.lower(cropStats.name)] --openperipheral donthave api for this. string.lower is used just in case.
+    cropStats.maxSize = cropSizes[string.lower(cropStats.name)] --open peripheral dont have api for this. string.lower is used just in case.
     return cropStats
 end
 

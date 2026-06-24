@@ -1,0 +1,19 @@
+# Манифест установки OpenComputers-скриптов
+# Строка @base — корень raw-URL на GitHub (ветка main).
+# После форка замените USER и имя репозитория.
+
+@base https://github.com/Alexey0795/temptestrepo/master/
+
+install.lua
+manifest.txt
+
+# — все скрипты для тестов на сервере
+errlog.lua
+01-probe.lua
+02-me-read.lua
+03-api-dump.lua
+04-drone-logger.lua
+05-drone-lap.lua
+06-drone-client.lua
+07-drone-server.lua
+09-coroutine-demo.lua
